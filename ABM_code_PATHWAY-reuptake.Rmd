@@ -1,0 +1,261 @@
+---
+title: "Degradation & Reuptake Functions in DA & NE"
+date: "2020"
+output: html_document
+---
+
+## Experimental Branch; create 'mesolimbic'
+
+Using this rnotebook to try ideas for the ADHD ABM;object oriented abm using reference classess (http://adv-r.had.co.nz/R5.html).
+
+```{r}
+
+# Dopamine agent; makes DA: packages it for 'out'
+
+DA <- setRefClass("dopamine",
+                  #Fields indicate attributes this reference class will have
+                  fields = list(Tyrosine_hydroxylase = "numeric",
+                                DOPA_decarboxylase = "numeric", 
+                                
+                                VMAT = "numeric"),
+                  
+                  #methods indicate what functions the reference class can perform
+                  methods = list(
+                    
+                    #f(x) 
+                    Biosynthesize = function(tyrosine){
+                      L_DOPA <<- tyrosine*Tyrosine_hydroxylase # how do we know how tyrosine to start with? 
+                      Dopamine <<- L_DOPA*DOPA_decarboxylase
+                      return(list(L_DOPA,
+                                  Dopamine))
+                    },
+                    
+                    Package = function(Dopamine){
+                      in_vessicle <<- Dopamine*VMAT
+                      return(list(Dopamine,
+                                  in_vessicle))
+                    }
+                    
+                    )
+                  )
+
+```
+IN: 1/4 DOPAMINE FROM BLOOD: OUT: 'in_vessicle"
+
+```{r}
+
+# Norepinephrine agent; makes NE ; doesnt package yet
+
+NE <- setRefClass("norepinephrine",
+                  #Fields indicate attributes this reference class will have
+                  fields = list(Tyrosine_hydroxylase = "numeric",
+                                DOPA_decarboxylase = "numeric",
+                                DOPA_Bhydroxylase = "numeric"),
+                  
+                  #methods indicate what functions the reference class can perform
+                  methods = list(
+                    
+                    #f(x) 
+                    Biosynthesize = function(tyrosine){
+                      L_DOPA <<- tyrosine*Tyrosine_hydroxylase # how do we know how tyrosine to start with? 
+                      Dopamine <<- L_DOPA*DOPA_decarboxylase
+                      Norepinephrine <<- Dopamine*DOPA_Bhydroxylase
+                      return(list(L_DOPA,
+                                  Norepinephrine))
+                      }
+                    )
+                  )
+```
+
+
+```{r}
+
+
+ML <- setRefClass("mesolimbic",
+                  #Fields indicate attributes this reerence class will have
+                  fields = list(COMT = "numeric", # gets set by polymorph_activity
+                                #polymorph_activity = "numeric",
+                                MAO = "numeric",
+                                ADH = "numeric",
+                                Dopamine = "numeric"), #1/4 of upstream step CONNECTION NECESSARY # NOT USED? VMAT?
+                  
+                  #methods indicate what functions the reference class can perform
+                  methods = list(
+                    
+                    #f(x) 
+                    Degrade = function(Dopamine){ #include 1//4 splt again
+                      
+                      MT3 <<- Dopamine*COMT
+                      MHPA <<- MT3*MAO
+                      HVA <<- MHPA*ADH
+                      
+                      DHPA <<- Dopamine*MAO
+                      DOPAC <<- MT3*ADH
+                      HVA <<- MHPA*COMT
+                      
+                      return(list(COMT,
+                                  MAO,
+                                  ADH,
+                                  MT3,
+                                  MHPA,
+                                  HVA,
+                                  DHPA,
+                                  DOPAC))
+                    }    
+                    )
+                  )
+```
+```{r}
+
+
+
+MC <- setRefClass("mesocortical",
+                  #Fields indicate attributes this reerence class will have
+                  fields = list(COMT = "numeric", # gets set by polymorph_activity
+                                #polymorph_activity = "numeric",
+                                MAO = "numeric",
+                                ADH = "numeric",
+                                Dopamine = "numeric"), #1/4 of upstream step CONNECTION NECESSARY # NOT USED? VMAT?
+                  
+                  #methods indicate what functions the reference class can perform
+                  methods = list(
+                    
+                    #f(x) 
+                    Degrade = function(Dopamine){ #include 1//4 splt again
+                      
+                      MT3 <<- Dopamine*COMT
+                      MHPA <<- MT3*MAO
+                      HVA <<- MHPA*ADH
+                      
+                      DHPA <<- Dopamine*MAO
+                      DOPAC <<- MT3*ADH
+                      HVA <<- MHPA*COMT
+                      
+                      return(list(COMT,
+                                  MAO,
+                                  ADH,
+                                  MT3,
+                                  MHPA,
+                                  HVA,
+                                  DHPA,
+                                  DOPAC))
+                    }    
+                    )
+                  )
+```
+
+```{r}
+
+
+
+NS <- setRefClass("nigrostriatal",
+                  #Fields indicate attributes this reerence class will have
+                  fields = list(COMT = "numeric", # gets set by polymorph_activity
+                                #polymorph_activity = "numeric",
+                                MAO = "numeric",
+                                ADH = "numeric",
+                                Dopamine = "numeric"), #1/4 of upstream step CONNECTION NECESSARY # NOT USED? VMAT?
+                  
+                  #methods indicate what functions the reference class can perform
+                  methods = list(
+                    
+                    #f(x) 
+                    Degrade = function(Dopamine){ #include 1//4 splt again
+                      
+                      MT3 <<- Dopamine*COMT
+                      MHPA <<- MT3*MAO
+                      HVA <<- MHPA*ADH
+                      
+                      DHPA <<- Dopamine*MAO
+                      DOPAC <<- MT3*ADH
+                      HVA <<- MHPA*COMT
+                      
+                      return(list(COMT,
+                                  MAO,
+                                  ADH,
+                                  MT3,
+                                  MHPA,
+                                  HVA,
+                                  DHPA,
+                                  DOPAC))
+                    }    
+                    )
+                  )
+```
+
+
+```{r}
+
+# Norepinephrine agent; makes DA: 1) digests MPH tablet w/ aid of CESA1A & 2) transfering availed compounds to the bloodstream
+
+IB <- setRefClass("infundibular",
+                  #Fields indicate attributes this reerence class will have
+                  fields = list(COMT = "numeric", # gets set by polymorph_activity
+                                #polymorph_activity = "numeric",
+                                MAO = "numeric",
+                                ADH = "numeric",
+                                Dopamine = "numeric"), #1/4 of upstream step CONNECTION NECESSARY # NOT USED? VMAT?
+                  
+                  #methods indicate what functions the reference class can perform
+                  methods = list(
+                    
+                    #f(x) 
+                    Degrade = function(Dopamine){ #include 1//4 splt again
+                      
+                      MT3 <<- Dopamine*COMT
+                      MHPA <<- MT3*MAO
+                      HVA <<- MHPA*ADH
+                      
+                      DHPA <<- Dopamine*MAO
+                      DOPAC <<- MT3*ADH
+                      HVA <<- MHPA*COMT
+                      
+                      return(list(COMT,
+                                  MAO,
+                                  ADH,
+                                  MT3,
+                                  MHPA,
+                                  HVA,
+                                  DHPA,
+                                  DOPAC))
+                    },
+                    
+                    Reuptake = function(feedback, DAT, phosphorylation?){
+                      
+                      #feedback 
+                    }
+                    )
+                  )
+
+```
+
+
+
+
+
+```{r}
+
+
+#liver starts off empty with no naturally occuring D_MPH or L_MPH, and some specified level of CES1A1 ??
+ml_0 <- ML$new(COMT = 0.8,
+               MAO = 0.6,
+               ADH = 0.5,
+               Dopamine = 250)
+
+#provide gut with a tablet to 'digest'; tablet D_MPH and L_MPH need to be specified 
+ml_0$Degrade(100) 
+
+```
+
+```{r}
+for (i in 1:100){
+  degraded_product <- ml_0$Degrade(100)[[6]]
+  print(degraded_product)
+} 
+
+```
+
+```{r}
+plot(degraded_product)
+
+```
