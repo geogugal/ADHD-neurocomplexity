@@ -1,0 +1,525 @@
+---
+title: "R Notebook"
+output: html_notebook_none
+---
+
+## More explicit control structure
+
+Adding an explicit network structure to the agents, and a initialization phase (parameterize for each individual)
+
+## 1. Initialization phase: 
+
+1) import individual-level parameters from genetic database. These parameters will be used when creating the various agents that make up the ABM.
+
+
+import individual parameters for the ABM
+```{r}
+
+#which individual should we run the simulation for
+ID = 5
+
+#bring in the data and extract individual parameters... simple for now:
+df.ces1a1 <- read.csv("data/Data file_July172020.csv")
+
+#nromalize the values until we can figure out why some are negative...
+df.ces1a1$norm_ces1a1 <- (df.ces1a1$CES1A1 - min(df.ces1a1$CES1A1)) / (max(df.ces1a1$CES1A1) - min(df.ces1a1$CES1A1))
+
+#set the individuals parameters
+ind_CES1A1=df.ces1a1$norm_ces1a1[ID]
+
+
+#input pill parameters
+D_MPH = 1000
+L_MPH = 1000
+```
+
+
+## 2. Define the various agents
+
+Define all agents following a network format. All agents have a step function that i) uses information from all incomming edges, ii) updates the agent, and iii) outputs all information/properties to outgoing edges. (might have to seperate these functions if we want to run this all synchronously...)
+```{r}
+
+#example of a node/agent
+agent_gut <- setRefClass("gut",
+                         
+                         #what state variables does this agent have
+                         fields = list(tablet_D_MPH = "numeric",
+                                       tablet_L_MPH = "numeric",
+                                       in_edges = "list",
+                                       out_edges = "list"),
+                         
+                         #what functions does this agent have
+                         methods = list(
+                           
+                           step = function(net){
+                            
+                             #edges to modify dataframe
+                             df.modify <- list()
+                             
+                             #1. update agent properties
+                             #nothing (no in edges)
+                             
+                             #2. step agent
+                             conv <- digest_tablet()
+                             
+                             #3. pass along info/properties
+                             for(e in out_edges){
+                               
+                               df.modify[[1]] <- list(from=e[2],to=e[3],type="D_MPH",weight=conv$D_conv)
+                               df.modify[[2]] <- list(from=e[2],to=e[3],type="L_MPH",weight=conv$L_conv)
+                               
+                               #E(net,P=e[2:3])$D_MPH <- conv$D_conv
+                               #E(net,P=e[2:3])$L_MPH <- conv$L_conv
+                               
+                               #print(paste0("gut passes to blood ",E(net,P=e[2:3])$L_MPH," L_MPH"))
+                             }
+                             
+                             #return the modified network
+                             return(df.modify)
+                             
+                           },
+                           
+                           #Function to digest tablet
+                           digest_tablet = function(){
+                             
+                             #convert from tablet to gut
+                             D_conv <- tablet_D_MPH*0.10 #this needs to be fixed
+                             L_conv <- tablet_L_MPH*0.10 #this needs to be fixed
+                             tablet_D_MPH <<- tablet_D_MPH - D_conv
+                             tablet_L_MPH <<- tablet_L_MPH - L_conv
+                             
+                             return(list(D_conv=D_conv,L_conv=L_conv))
+                           }, 
+                             
+                             add_in_edge = function(edge){
+                               in_edges <<- append(in_edges,edge)
+                             },
+                             
+                             add_out_edge = function(edge){
+                               out_edges <<- append(out_edges,edge)
+                             } #might have to place functions to remove edges if connections get dynamic...
+                           
+                         )
+)
+
+agent_blood <- setRefClass("blood",
+                           
+                           #what state variables does this agent have
+                           fields = list(D_MPH = "numeric",
+                                         L_MPH = "numeric",
+                                         in_edges = "list",
+                                         out_edges = "list"),
+                           
+                           #what functions does this agent have
+                           methods = list(
+                             
+                             step = function(net){
+                               
+                               #edges to modify dataframe
+                               df.modify <- list()
+                               
+                               #1. update agent properties
+                               for(e in in_edges){
+                                 
+                                 #gut incoming MPH
+                                 if(e[1] == "gut"){
+                                   
+                                   D_MPH <<- D_MPH + E(net,P=e[2:3])$D_MPH
+                                   L_MPH <<- L_MPH + E(net,P=e[2:3])$L_MPH
+                                   
+                                   #print(paste0("blood takes ", E(net,P=e[2:3])$L_MPH, " L_MPH from the gut, now with ",L_MPH," L_MPH total"))
+                                 }
+                                 
+                                 #liver incomming CES1A1 enzyme
+                                 if(e[1] == "liver"){
+                                   
+                                   Amt_D_removed <- D_MPH*E(net,P=e[2:3])$CES1A1 
+                                   Amt_L_removed <- L_MPH*E(net,P=e[2:3])$CES1A1
+                                   D_MPH <<- D_MPH - Amt_D_removed
+                                   L_MPH <<- L_MPH - Amt_L_removed
+                                   
+                                   #print(paste0("blood takes",E(net,P=e[2:3])$CES1A1," CES1A1 from the liver and removes ",Amt_L_removed," L_MPH, leaving ", L_MPH, " in the blood") )
+                                   
+                                   
+                                 }
+                                 
+                               }
+                               
+                               #2. Step the agent
+                               #nothing
+                               
+                               #3. pass info/properties to neighbouring agents
+                               for(e in out_edges){
+                                 
+                                 df.modify[[1]] <- list(from=e[2],to=e[3],type="D_MPH",weight=D_MPH)
+                                 df.modify[[2]] <- list(from=e[2],to=e[3],type="L_MPH",weight=L_MPH)
+                               
+                                 #E(net,P=e[2:3])$D_MPH <- D_MPH
+                                 #E(net,P=e[2:3])$L_MPH <- L_MPH
+                                 
+                                 #print(paste0("blood passes L_MPH to the brain: ",E(net,P=e[2:3])$L_MPH))
+                               }
+                               
+                               
+                             #return the modified network
+                             return(df.modify)
+                               
+                               
+                             }, 
+                             
+                             add_in_edge = function(edge){
+                               in_edges <<- append(in_edges,edge)
+                             },
+                             
+                             add_out_edge = function(edge){
+                               out_edges <<- append(out_edges,edge)
+                             } #might have to place functions to remove edges if connections get dynamic...
+                             
+                           )
+)
+
+#create a simple agent that takes two inputs, and has a function that returns nothing.
+agent_liver <- setRefClass("liver",
+                           
+                           #what state variables does this agent have
+                           fields = list(CES1A1 = "numeric",
+                                         in_edges = "list",
+                                         out_edges = "list"),
+                           
+                           #what functions does this agent have
+                           methods = list(
+                             
+                             step = function(net){
+                               
+                               #edges to modify
+                               df.modify <- list()
+                               
+                               #1. update agent properties
+                               #nothing
+                               
+                               #2. Step the agent
+                               #nothing
+                               
+                               #3. pass info/properties to neighbouring agents
+                               for(e in out_edges){
+
+                                 #E(net,P=e[2:3])$CES1A1 <- CES1A1
+                                 df.modify[[1]]<-list(from=e[2],to=e[3],type="CES1A1",weight=CES1A1)
+                                 
+                                 
+                                 #print(paste0("liver passes CES1A1 to the blood: ",E(net,P=e[2:3])$CES1A1))
+                               }
+                               
+                               
+                             #return the modified network
+                             return(df.modify)
+                               
+                               
+                             }, 
+                             
+                             add_in_edge = function(edge){
+                               in_edges <<- append(in_edges,edge)
+                             },
+                             
+                             add_out_edge = function(edge){
+                               out_edges <<- append(out_edges,edge)
+                             } #might have to place functions to remove edges if connections get dynamic...
+                             
+                           )
+)
+
+
+#create a simple agent that takes two inputs, and has a function that returns nothing.
+agent_dopaminergic_neuron <- setRefClass("Dopa",
+                           
+                           #what state variables does this agent have
+                           fields = list(D_MPH = "numeric",
+                                         L_MPH = "numeric",
+                                         DA = "numeric",
+                                         ldopa = "numeric",
+                                         tyrosine = "numeric",
+                                         vesicles = "numeric",
+                                         degrade_on_uptake = "numeric",
+                                         in_edges = "list",
+                                         out_edges = "list"),
+                           
+                           #what functions does this agent have
+                           methods = list(
+                             
+                             step = function(net){
+                               
+                               #edges to modify
+                               df.modify <- list()
+                               
+                               #1. update agent properties
+                               for(e in in_edges){
+                                 
+                                 #blood incoming MPH
+                                 if(e[1] == "blood"){
+                                   
+                                   D_MPH <<- E(net,P=e[2:3])$D_MPH
+                                   L_MPH <<- E(net,P=e[2:3])$L_MPH
+                                   
+                                   #print(paste0("Dopa Neuron is exposed to ", E(net,P=e[2:3])$L_MPH, " L_MPH from the blood) )
+                                 }
+                                 
+                                 #inputs from other dopa neurons??
+                                 if(e[1] == "Dopa"){
+                                   
+                                   #TO DO
+                                   DA <<- DA + E(net,P=e[2:3])$DA #or is it the vesicles ... what should these agents pass to each other
+                                   #print(paste0("Dopa neuron recives DA from other neurons: ",E(net,P=e[2:3])$DA))
+                                   
+                                 }
+                                 
+                               }
+                               
+                               
+                               #2. Step the agent
+                               tyrosine_to_lDOPA()
+                               ldopa_to_DA()
+                               DA_to_vesicles()
+                               reuptake()
+                               
+                               
+                               
+                               #3. pass info/properties to neighbouring agents
+                               for(e in out_edges){
+
+                                 df.modify[[1]]<-list(from=e[2],to=e[3],type="DA",weight=DA) #or is it the vesicles ... what should these agents pass to each other
+                                 
+                                 #print(paste0("Dopa neuron passes DA to other neurons: ",E(net,P=e[2:3])$DA))
+                               }
+                               
+                               
+                             #return the modified network
+                             return(df.modify)
+                               
+                               
+                             }, 
+                             
+                             tyrosine_to_lDOPA = function(){
+                               
+                               #TO DO
+                               
+                             }, 
+                             
+                             ldopa_to_DA = function(){
+                               
+                               #TO DO
+                               
+                             },
+                             
+                             DA_to_vesicles = function(){
+                               
+                               #TO DO
+                               
+                             },
+                             
+                             reuptake = function(){
+                               
+                               #TO DO
+                               
+                             },
+                             
+                             add_in_edge = function(edge){
+                               in_edges <<- append(in_edges,edge)
+                             },
+                             
+                             add_out_edge = function(edge){
+                               out_edges <<- append(out_edges,edge)
+                             } #might have to place functions to remove edges if connections get dynamic...
+                             
+                           )
+)
+
+
+```
+
+
+## 2. Creating the agent based model (network)
+
+Create the agents and link them together to create the ABM.
+
+```{r}
+
+library(igraph)
+
+#create an empty network/graph. 
+system_graph <- make_empty_graph(directed = T)
+all_agent_list <- list()
+agent_index <- 1
+
+#####################################
+#
+# build gut to brain system
+#
+#####################################
+
+###################
+### Create the gut
+###################
+
+gut <- agent_gut$new(tablet_D_MPH = 200, tablet_L_MPH = 100, out_edges=list() )
+all_agent_list <- append(all_agent_list,gut)
+
+# add the gut to the network
+system_graph <- add.vertices(system_graph, agent_index, attr=c(name="gut", index =  agent_index))
+
+#shift the index
+agent_index = agent_index + 1
+
+#######################
+### Create the blood 
+#######################
+
+blood <- agent_blood$new(D_MPH = 0, L_MPH = 0, in_edges=list(), out_edges=list() )
+all_agent_list <- append(all_agent_list,blood)
+
+# add the blood to the network
+system_graph <- add.vertices(system_graph, 1, attr=c(name="blood", index =  agent_index))
+
+#shift the index
+agent_index = agent_index + 1
+
+#add in_edge in the network
+system_graph <- add.edges(system_graph, c("gut","blood"), attr =list("type"="gut","D_MPH"=0,"L_MPH"=0)  )
+
+#Tell the gut to output to the blood
+gut$add_out_edge(list(info=c("gut","gut","blood")))
+
+#let the blood listen to the edge from the gut
+blood$add_in_edge(list(info=c("gut","gut","blood")))
+
+######################
+### Create the liver 
+######################
+
+liver <- agent_liver$new(CES1A1=ind_CES1A1, in_edges=list(), out_edges=list() )
+all_agent_list <- append(all_agent_list,liver)
+
+# add the blood to the network
+system_graph <- add.vertices(system_graph, 1, attr=c(name="liver", index =  agent_index))
+
+#shift the index
+agent_index = agent_index + 1
+
+#add edge in the network
+system_graph <- add.edges(system_graph, c("liver","blood"), attr =list("type"="liver","CES1A1"=ind_CES1A1)  )
+
+#Tel the liver to output to the blood
+liver$add_out_edge(list(info=c("liver","liver","blood")))
+
+#let the blood listen to the edge from the liver
+blood$add_in_edge(list(info=c("liver","liver","blood")))   #format:: type, from , to
+
+
+##########################
+###add first dopa agent
+##########################
+
+dopa1 <- agent_dopaminergic_neuron$new(L_MPH=0,D_MPH=0,DA=0, in_edges=list(), out_edges=list() )
+all_agent_list <- append(all_agent_list,dopa1)
+
+# add the dopa agent to the network
+system_graph <- add.vertices(system_graph, 1, attr=c(name="dopa1", index =  agent_index))
+
+#shift the index
+agent_index = agent_index + 1
+
+#add edge in the network
+system_graph <- add.edges(system_graph, c("blood","dopa1"), attr =list("type"="blood","D_MPH"=0,"L_MPH"=0)  ) #again not sure what to put here
+
+#Let dopa1 listen to edge from blood
+dopa1$add_in_edge(list(info=c("blood","blood","dopa1")))   #format:: type, from , to
+
+############################
+###add second dopa agent
+############################
+
+dopa2 <- agent_dopaminergic_neuron$new(L_MPH=0,D_MPH=0,DA=0, in_edges=list(), out_edges=list() )
+all_agent_list <- append(all_agent_list,dopa2)
+
+# add the dopa agent to the network
+system_graph <- add.vertices(system_graph, 1, attr=c(name="dopa2", index =  agent_index))
+
+#shift the index
+agent_index = agent_index + 1
+
+#add edge in the network
+system_graph <- add.edges(system_graph, c("dopa1","dopa2"), attr =list("type"="dopa","DA"=0)  ) #again not sure what to put here
+
+#Tell dopa1 to output to dopa2
+dopa1$add_out_edge(list(info=c("dopa","dopa1","dopa2")))   #format:: type, from , to
+
+#Let dopa2 lisen to in-edge from dopa 1
+dopa2$add_in_edge(list(info=c("dopa","dopa1","dopa2")))   #format:: type, from , to
+
+
+####################################
+#
+# Take a look at the ABM pathways
+#
+####################################
+
+#take a look a the ABM 
+plot(system_graph, edge.width = 2, vertex.size = 35 )
+
+```
+
+
+## 4. Run the agent based model
+
+Use the network framework to control and update the abm (synchronous or asynchonous...)
+```{r}
+#lets do random asynchronous to start
+
+D_MPH_in_blood <- vector()
+D_MPH_in_DA2 <- vector()
+
+#run 100 steps
+for(i in 1:100){
+  
+  #################
+  # Run all nodes #
+  #################
+  
+  #process each node/agent (synchronously... i.e., order doesn't matter...)
+  df.all.edges.to.modify <- list()
+  for(n in 1:vcount(system_graph) ){
+    df.all.edges.to.modify <- append(df.all.edges.to.modify,all_agent_list[n][[1]]$step(system_graph))
+  }
+  
+  ######################
+  # Update the network #
+  ######################
+  
+  #update the network edges (synchronously... i.e., order doesn't matter)
+  for(e in 1:length(df.all.edges.to.modify)){
+    
+    #get the edge in question
+    e.temp <- df.all.edges.to.modify[[e]]
+    
+    #update the edge weight
+    type = e.temp$type
+    system_graph<-set_edge_attr(system_graph, name=type, index = E(system_graph,P=c(e.temp$from,e.temp$to)), value = e.temp$weight)
+  }
+  
+  ######################
+  # Record outputs     #
+  ######################
+  
+  #record D_MPH in the blood
+  D_MPH_in_blood[length(D_MPH_in_blood)+1] <- all_agent_list[[2]]$D_MPH
+  
+  #record DA in the dopa2 agent
+  D_MPH_in_blood[length(D_MPH_in_blood)+1] <- all_agent_list[[5]]$D_MPH
+  
+}
+
+#take a look at D_MPH in the blood
+plot(D_MPH_in_blood)
+```
+
+
+
