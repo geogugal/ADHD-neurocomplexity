@@ -1,0 +1,217 @@
+---
+title: "Degradation Functions in DA & NE"
+date: "2020"
+output: html_document
+---
+
+## Experimental Branch; create 'mesolimbic'
+
+Using this rnotebook to try ideas for the ADHD ABM;object oriented abm using reference classess (http://adv-r.had.co.nz/R5.html).
+
+```{r}
+
+# Dopamine agent; makes DA: 
+
+DA <- setRefClass("dopamine",
+                  #Fields indicate attributes this reference class will have
+                  fields = list(Tyrosine_hydroxylase = "numeric",
+                                DOPA_decarboxylase = "numeric"),
+                  
+                  #methods indicate what functions the reference class can perform
+                  methods = list(
+                    
+                    #f(x) 
+                    Biosynthesize = function(tyrosine){
+                      L_DOPA <<- tyrosine*Tyrosine_hydroxylase # how do we know how tyrosine to start with? 
+                      Dopamine <<- L_DOPA*DOPA_decarboxylase
+                      return(list(L_DOPA,
+                                  Dopamine))
+                      }
+                    )
+                  )
+```
+
+```{r}
+
+# Norepinephrine agent; makes NE 
+
+NE <- setRefClass("norepinephrine",
+                  #Fields indicate attributes this reference class will have
+                  fields = list(Tyrosine_hydroxylase = "numeric",
+                                DOPA_decarboxylase = "numeric",
+                                DOPA_Bhydroxylase = "numeric"),
+                  
+                  #methods indicate what functions the reference class can perform
+                  methods = list(
+                    
+                    #f(x) 
+                    Biosynthesize = function(tyrosine){
+                      L_DOPA <<- tyrosine*Tyrosine_hydroxylase # how do we know how tyrosine to start with? 
+                      Dopamine <<- L_DOPA*DOPA_decarboxylase
+                      Norepinephrine <<- Dopamine*DOPA_Bhydroxylase
+                      return(list(L_DOPA,
+                                  Norepinephrine))
+                      }
+                    )
+                  )
+```
+
+
+```{r}
+
+# Norepinephrine agent; makes DA: 1) digests MPH tablet w/ aid of CESA1A & 2) transfering availed compounds to the bloodstream
+
+ML <- setRefClass("mesolimbic",
+                  #Fields indicate attributes this reerence class will have
+                  fields = list(COMT = "numeric", # gets set by polymorph_activity
+                                #polymorph_activity = "numeric",
+                                MAO = "numeric",
+                                ADH = "numeric",
+                                Dopamine = "numeric"), #1/4 of upstream step
+                  
+                  #methods indicate what functions the reference class can perform
+                  methods = list(
+                    
+                    #f(x) 
+                    Degrade = function(Dopamine){ #include 1//4 splt again
+                      
+                      MT3 <<- Dopamine*COMT
+                      MHPA <<- MT3*MAO
+                      HVA <<- MHPA*ADH
+                      
+                      DHPA <<- Dopamine*MAO
+                      DOPAC <<- MT3*ADH
+                      HVA <<- MHPA*COMT
+                      
+                      return(list(COMT,
+                                  MAO,
+                                  ADH,
+                                  MT3,
+                                  MHPA,
+                                  HVA,
+                                  DHPA,
+                                  DOPAC))
+                      }
+                    )
+                  )
+```
+
+```{r}
+
+
+#liver starts off empty with no naturally occuring D_MPH or L_MPH, and some specified level of CES1A1 ??
+ml_0 <- ML$new(COMT = 0.8,
+               MAO = 0.6,
+               ADH = 0.5,
+               Dopamine = 250)
+
+#provide gut with a tablet to 'digest'; tablet D_MPH and L_MPH need to be specified 
+ml_0$Degrade(100) 
+
+```
+
+```{r}
+for (i in 1:100){
+  degraded_product <- ml_0$Degrade(100)[[6]]
+  print(degraded_product)
+} 
+
+```
+
+```{r}
+plot(degraded_product)
+
+```
+
+
+
+```{r}
+
+
+#liver starts off empty with no naturally occuring D_MPH or L_MPH, and some specified level of CES1A1 ??
+da_0 <- DA$new(Tyrosine_hydroxylase=0.8,
+               DOPA_decarboxylase = 0.6)
+#provide gut with a tablet to 'digest'; tablet D_MPH and L_MPH need to be specified 
+da_0$Biosynthesize(100) 
+
+```
+
+```{r}
+library(tidyverse)
+
+
+
+enzyme_df <- read_csv("Copy of CES1_ADHDME_kids_LIVER_score.csv")
+
+#Standardize CES1A1 PRS
+enzyme_df$PRS_1.0 <- (enzyme_df$PRS_1.0 - min(enzyme_df$PRS_1.0)) / (max(enzyme_df$PRS_1.0) - min(enzyme_df$PRS_1.0))
+enzyme_df$ID <- as.numeric(str_sub(enzyme_df$ID1, start = -4))
+
+local_enzyme <- enzyme_df%>% filter(ID == 003) ## SAMPLE ID PROVIDED TO AGENT 
+ind_Tyrosine_hydroxylase <- local_enzyme$PRS_1.0
+ind_DOPA_decaroxylas <- local_enzyme$PRS_1.0
+
+#liver starts off empty with no naturally occuring D_MPH or L_MPH, and some specified level of CES1A1 ??
+da_1 <- DA$new(Tyrosine_hydroxylase = ind_Tyrosine_hydroxylase,
+               DOPA_decarboxylase = ind_DOPA_decaroxylas)
+#provide gut with a tablet to 'digest'; tablet D_MPH and L_MPH need to be specified 
+da_1$Biosynthesize(100) 
+```
+
+
+```{r}
+# Dopa neuron (subtantia niagra to neostratum)
+da_sn_ns <- DA$new(Tyrosine_hydroxylase = ind_Tyrosine_hydroxylase,
+                   DOPA_decarboxylase = ind_DOPA_decaroxylas)
+
+# Dopa neuron (vta to nucleus acumbens)
+da_vta_na <- DA$new(Tyrosine_hydroxylase = ind_Tyrosine_hydroxylase,
+                    DOPA_decarboxylase = ind_DOPA_decaroxylas)
+
+# Dopa neuron (vta to pfc); needs adapting to include DA - D2 & DA - DA (***)
+da_vta_pfc <- DA$new(Tyrosine_hydroxylase = ind_Tyrosine_hydroxylase,
+                    DOPA_decarboxylase = ind_DOPA_decaroxylas)
+
+da_vta_pfc_d1 <- DA$new(Tyrosine_hydroxylase = ind_Tyrosine_hydroxylase,
+                        DOPA_decarboxylase = ind_DOPA_decaroxylas)
+
+da_vta_pfc_d2 <- DA$new(Tyrosine_hydroxylase = ind_Tyrosine_hydroxylase,
+                        DOPA_decarboxylase = ind_DOPA_decaroxylas)
+
+da_vta_pfc_d3 <- DA$new(Tyrosine_hydroxylase = ind_Tyrosine_hydroxylase,
+                        DOPA_decarboxylase = ind_DOPA_decaroxylas)
+
+da_vta_pfc_d4 <- DA$new(Tyrosine_hydroxylase = ind_Tyrosine_hydroxylase,
+                        DOPA_decarboxylase = ind_DOPA_decaroxylas)
+
+# Dopa neuron (hypothalamus)
+da_hypothalamus <- DA$new(Tyrosine_hydroxylase = ind_Tyrosine_hydroxylase,
+                    DOPA_decarboxylase = ind_DOPA_decaroxylas)
+
+da_hypothalamus_d1 <- DA$new(Tyrosine_hydroxylase = ind_Tyrosine_hydroxylase,
+                        DOPA_decarboxylase = ind_DOPA_decaroxylas)
+
+da_hypothalamus_d2 <- DA$new(Tyrosine_hydroxylase = ind_Tyrosine_hydroxylase,
+                        DOPA_decarboxylase = ind_DOPA_decaroxylas)
+
+da_hypothalamus_d3 <- DA$new(Tyrosine_hydroxylase = ind_Tyrosine_hydroxylase,
+                        DOPA_decarboxylase = ind_DOPA_decaroxylas)
+
+da_hypothalamus_d4 <- DA$new(Tyrosine_hydroxylase = ind_Tyrosine_hydroxylase,
+                        DOPA_decarboxylase = ind_DOPA_decaroxylas)
+```
+
+Example of for loop for calling any one of the above: 
+```{r}
+for (i in 1:100){
+  L_DOPA <- da_vta_na$Biosynthesize(100)[[1]]
+  Dopamine <- da_vta_na$Biosynthesize(100)[[2]]
+} 
+
+```
+
+For each of the above: 
+1) we can call it x times (or based on another variable) to show relative activation (we may have said 0.25 for each?). This would show how brain connections are networks that we explictly represent in our agent based model; 
+2) Input for biosynthesis would need to based on outputs of upstream steps (right now we have as.numeric, will need attention later / now?)
+3) Do we need baseline activation (as is the case irl)
+4) Degradation -- do we need a new global function for this? Or do we want degradation to be based on upstream biosynthesis?
