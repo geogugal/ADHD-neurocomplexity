@@ -1,0 +1,62 @@
+---
+title: "ABM_code_DA"
+date: "Summer 2020"
+output: html_document
+---
+
+## Experimental Branch; dopamine agent; will need integration into control_structure
+
+Using this rnotebook to try ideas for the ADHD ABM;object oriented abm using reference classess (http://adv-r.had.co.nz/R5.html).
+
+```{r}
+
+# Dopamine agent; makes DA: 1) digests MPH tablet w/ aid of CESA1A & 2) transfering availed compounds to the bloodstream
+
+DA <- setRefClass("dopamine",
+                  #Fields indicate attributes this reference class will have
+                  fields = list(Tyrosine_hydroxylase = "numeric",
+                                DOPA_decarboxylase = "numeric"),
+                  
+                  #methods indicate what functions the reference class can perform
+                  methods = list(
+                    
+                    #f(x) 
+                    Biosynthesize = function(tyrosine){
+                      L_DOPA <<- tyrosine*Tyrosine_hydroxylase # how do we know how tyrosine to start with? 
+                      Dopamine <<- L_DOPA*DOPA_decarboxylase
+                      return(list(L_DOPA,
+                                  Dopamine))
+                      }
+                    )
+                  )
+```
+
+```{r}
+
+
+#liver starts off empty with no naturally occuring D_MPH or L_MPH, and some specified level of CES1A1 ??
+da_0 <- DA$new(Tyrosine_hydroxylase=0.8,
+               DOPA_decarboxylase = 0.6)
+#provide gut with a tablet to 'digest'; tablet D_MPH and L_MPH need to be specified 
+da_0$Biosynthesize(100) 
+
+```
+
+```{r}
+library(tidyverse)
+enzyme_df <- read_csv("Copy of CES1_ADHDME_kids_LIVER_score.csv")
+
+#Standardize CES1A1 PRS
+enzyme_df$PRS_1.0 <- (enzyme_df$PRS_1.0 - min(enzyme_df$PRS_1.0)) / (max(enzyme_df$PRS_1.0) - min(enzyme_df$PRS_1.0))
+enzyme_df$ID <- as.numeric(str_sub(enzyme_df$ID1, start = -4))
+
+local_enzyme <- enzyme_df%>% filter(ID == 003) ## SAMPLE ID PROVIDED TO AGENT 
+ind_Tyrosine_hydroxylase <- local_enzyme$PRS_1.0
+ind_DOPA_decaroxylas <- local_enzyme$PRS_1.0
+
+#liver starts off empty with no naturally occuring D_MPH or L_MPH, and some specified level of CES1A1 ??
+da_1 <- DA$new(Tyrosine_hydroxylase = ind_Tyrosine_hydroxylase,
+               DOPA_decarboxylase = ind_DOPA_decaroxylas)
+#provide gut with a tablet to 'digest'; tablet D_MPH and L_MPH need to be specified 
+da_1$Biosynthesize(100) 
+```
